@@ -124,3 +124,39 @@ class SelfAttention(nn.Module):
         out = self.fc_out(out)
 
         return out
+
+
+# Now we create Transformer Block
+class TransformerBlock(nn.Module):
+
+    def __init__(self, embed_size, heads, dropout, forward_expansion):
+        super().__init__()
+        # We are going to use the self attention here
+        self.attention = SelfAttention(embed_size=embed_size, heads=heads)
+        # Then we apply normalization
+        self.norm1 = nn.LayerNorm(embed_size)
+        # Feed forward and Normalization layer
+        # We are maping to some more nodes
+        # In paper forward_expension = 4
+        # After ReLU they map back to embed_size
+        self.feef_forward = nn.Sequential(
+            nn.Linear(in_features=embed_size,
+                      out_features=forward_expansion * embed_size), nn.ReLU(),
+            nn.Linear(in_features=forward_expansion * embed_size,
+                      out_features=embed_size))
+        self.norm2 = nn.LayerNorm(embed_size)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, values, keys, queries, mask):
+        # Adding attention layer
+        attention = self.attention(values, keys, queries, mask)
+        # Adding skip connection
+        skip = self.norm1(attention + queries)
+        # Adding dropout
+        dropout = self.dropout(skip)
+        # Applying feed forward and Normalization
+        forward = self.feef_forward(dropout)
+        skip = self.norm2(forward + dropout)
+        out = self.dropout(skip)
+
+        return out
