@@ -117,6 +117,8 @@ class SelfAttention(nn.Module):
         # Flatten last two dimention
         out = torch.einsum('nhqk, nvhd->nqhd', [attention, values]).reshape(
             N, query_len, self.heads * self.head_dim)
+        # After reshape we convert it to (N, 10, 256)
+        # Assume Sentence length = 10, embed_size = 256
 
         # Now apply fully connected layer
         out = self.fc_out(out)
