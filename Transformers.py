@@ -160,3 +160,48 @@ class TransformerBlock(nn.Module):
         out = self.dropout(skip)
 
         return out
+
+
+# Now both self attention and transformer block is done
+# Now let's build the Encoder part
+# Now we are going to do embedding
+class Encoder(nn.Module):
+
+    def __init__(self, source_vocab_size, embed_size, num_layers, heads,
+                 device, forward_expension, dropout, max_length):
+        super().__init__()
+        self.embed_size = embed_size
+        self.device = device
+        # Word embedding
+        self.word_embedding = nn.Embedding(source_vocab_size, embed_size)
+        # Positional embedding
+        self.positional_embedding = nn.Embedding(max_length, embed_size)
+        # If we want multiple transformer blocks then we can add here
+        self.layers = nn.ModuleList([
+            TransformerBlock(embed_size=embed_size,
+                             heads=heads,
+                             dropout=dropout,
+                             forward_expansion=forward_expension)
+        ])
+        self.dropout = nn.Dropout(dropout)
+
+        # Now we initialize all of the things. Let's arrange them in forward()
+
+    def forward(self, x, mask):
+        N, seq_length = x.shape
+        # torch.arange() generates a sequence of numbers starting from the first argument and ending before the second argument
+        # torch.expand() expand the tensors along with dimention
+        # So we create a position vector of input text samples
+        positions = torch.arange(0,
+                                 seq_length).expand(N,
+                                                    seq_length).to(self.device)
+        # We pass input to embedding and add positional embedding
+        out = self.word_embedding(x) + self.positional_embedding(positions)
+        # The positional embedding help us to understand how words are positions
+        out = self.dropout(out)
+
+        # Here we only add one layer
+        for layer in self.layers:
+            out = layer(out, out, out, mask)
+
+        return out
