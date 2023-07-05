@@ -64,7 +64,7 @@ class SelfAttention(nn.Module):
         self.queries = nn.Linear(self.embed_size, self.embed_size, bias=False)
         self.fc_out = nn.Linear(self.embed_size, self.embed_size)
 
-    def forward(self, values, keys, queries, mask):
+    def forward(self, values, keys, queries):
         # No. of examples send in at the same time
         N = queries.shape[0]
         # Here this lengths are the sentence length as input
@@ -99,10 +99,6 @@ class SelfAttention(nn.Module):
         # We can think of it as matrix multiplication of 10x256 * 256x10 = 10x10
         # We assume 10 is sentence length and 256 is word embeddings
         energy = torch.einsum('nqhd, nkhd->nhqk', [queries, keys])
-
-        if mask is not None:
-            # If a element mask value = 0 then we want to shut them off. So we give them very less value which have 0
-            energy = energy.masked_fill(mask == 0, float('-1e20'))
 
         # Now we apply Softmax activation and normalize accross key_len
         attention = torch.softmax(energy / (self.embed_size**(1 / 2)), dim=3)
@@ -147,9 +143,9 @@ class TransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(embed_size)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, values, keys, queries, mask):
+    def forward(self, values, keys, queries):
         # Adding attention layer
-        attention = self.attention(values, keys, queries, mask)
+        attention = self.attention(values, keys, queries)
         # Adding skip connection
         skip = self.norm1(attention + queries)
         # Adding dropout
@@ -192,7 +188,7 @@ class Encoder(nn.Module):
 
         # Now we initialize all of the things. Let's arrange them in forward()
 
-    def forward(self, x, mask):
+    def forward(self, x):
         N, seq_length = x.shape
         # torch.arange() generates a sequence of numbers starting from the first argument and ending before the second argument
         # torch.expand() expand the tensors along with dimention
@@ -207,7 +203,7 @@ class Encoder(nn.Module):
 
         # Here we only add one layer
         for layer in self.layers:
-            out = layer(out, out, out, mask)
+            out = layer(out, out, out)
 
         return out
 
@@ -228,16 +224,15 @@ class DecoderBlock(nn.Module):
             forward_expansion=forward_expansion)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, values, keys, src_mask, trg_mask):
+    def forward(self, x, values, keys):
         # Here x is input from our target
         # Values and keys are from encoder which is already run before this
-        # Decoder mask is trg_mask
-        attention = self.attention(x, x, x, trg_mask)
+        attention = self.attention(x, x, x)
         # Skip connection part
         norm = self.norm(attention + x)
         # We create the queries from target input and pass values, keys from encoder to transformer block
         queries = self.dropout(norm)
-        out = self.transformer_block(values, keys, queries, src_mask)
+        out = self.transformer_block(values, keys, queries)
 
         return out
 
@@ -265,7 +260,7 @@ class Decoder(nn.Module):
 
     # This is the main understanding
     # One by one we marge together for decoder
-    def forward(self, x, encoder_out, src_mask, trg_mask):
+    def forward(self, x, encoder_out):
         N, seq_length = x.shape
         # Set the position as encoder
         positions = torch.arange(0,
@@ -278,7 +273,7 @@ class Decoder(nn.Module):
         # Now apply the Decoder
         for layer in self.layers:
             # Quries from decoder and values and keys are from encoder out
-            x = layer(x, encoder_out, encoder_out, src_mask, trg_mask)
+            x = layer(x, encoder_out, encoder_out)
 
         out = self.fc_out(x)
         return out
@@ -321,21 +316,11 @@ class Transformer(nn.Module):
         self.trg_pad_idx = trg_pad_idx
         self.device = device
 
-    # Making source and target mask
-    def make_mask(self, src):
-        # Here src is the input word token
-        # Source mask will be (N, 1, 1, src_len)
-        src_mask = (src != self.src_pad_idx).unsqueeze(1).unsqueeze(2)
-        return src_mask.to(self.device)
-
     # Now combining every steps one by one
     def forward(self, src, trg):
-        # Creating mask for source and target
-        src_mask = self.make_mask(src)
-        trg_mask = self.make_mask(trg)
         # Now let's pass the data to the model
-        enc_src = self.encoder(src, src_mask)
-        out = self.decoder(trg, enc_src, src_mask, trg_mask)
+        enc_src = self.encoder(src)
+        out = self.decoder(trg, enc_src)
         return out
 
 
