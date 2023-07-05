@@ -233,3 +233,49 @@ class DecoderBlock(nn.Module):
         # We create the queries from target input and pass values, keys from encoder to transformer block
         queries = self.dropout(norm)
         out = self.transformer_block(values, keys, queries, src_mask)
+
+        return out
+
+
+# Let's build the Decoder
+class Decoder(nn.Module):
+
+    def __init__(self, target_vocab_size, embed_size, num_layers, heads,
+                 forward_expantion, dropout, max_len, device):
+        super().__init__()
+        self.device = device
+        # Output word embeddings as input word embeddings
+        self.word_embedding = nn.Embedding(target_vocab_size, embed_size)
+        # Positional vector for output as input
+        self.position_embedding = nn.Embedding(max_len, embed_size)
+
+        # Multiple Decoder block
+        self.layers = nn.ModuleList([
+            DecoderBlock(embed_size, heads, forward_expantion, dropout, device)
+            for _ in range(num_layers)
+        ])
+        # target_vocab_size is the vocabulary size of the target vocabulary
+        self.fc_out = nn.Linear(embed_size, target_vocab_size)
+        self.dropout = nn.Dropout(dropout)
+
+    # This is the main understanding
+    # One by one we marge together for decoder
+    def forward(self, x, encoder_out, src_mask, trg_mask):
+        N, seq_length = x.shape
+        # Set the position as encoder
+        positions = torch.arange(0,
+                                 seq_length).expand(N,
+                                                    seq_length).to(self.device)
+        # Now apply word embeddings and position embeddings
+        x = self.word_embedding(x) + self.position_embedding(x)
+        x = self.dropout(x)
+
+        # Now apply the Decoder
+        for layer in self.layers:
+            # Quries from decoder and values and keys are from encoder out
+            x = layer(x, encoder_out, encoder_out, src_mask, trg_mask)
+
+        out = self.fc_out(x)
+
+
+# Now let's put this together to understand all the steps one by one
