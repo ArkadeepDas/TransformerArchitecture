@@ -182,6 +182,7 @@ class Encoder(nn.Module):
                              heads=heads,
                              dropout=dropout,
                              forward_expansion=forward_expension)
+            for _ in range(num_layers)
         ])
         self.dropout = nn.Dropout(dropout)
 
@@ -267,7 +268,7 @@ class Decoder(nn.Module):
                                  seq_length).expand(N,
                                                     seq_length).to(self.device)
         # Now apply word embeddings and position embeddings
-        x = self.word_embedding(x) + self.position_embedding(x)
+        x = self.word_embedding(x) + self.position_embedding(positions)
         x = self.dropout(x)
 
         # Now apply the Decoder
@@ -279,3 +280,64 @@ class Decoder(nn.Module):
 
 
 # Now let's put this together to understand all the steps one by one
+class Transformer(nn.Module):
+
+    def __init__(self,
+                 src_vocab_size,
+                 trg_vocab_size,
+                 src_pad_idx,
+                 trg_pad_idx,
+                 embed_size=256,
+                 num_layers=6,
+                 forward_expention=4,
+                 heads=8,
+                 dropout=0,
+                 device='cuda',
+                 max_length=100):
+        super().__init__()
+        # Initializing Encoder and Decoder
+        self.encoder = Encoder(source_vocab_size=src_vocab_size,
+                               embed_size=embed_size,
+                               num_layers=num_layers,
+                               heads=heads,
+                               device=device,
+                               forward_expension=forward_expention,
+                               dropout=dropout,
+                               max_length=max_length)
+        self.decoder = Decoder(target_vocab_size=trg_vocab_size,
+                               embed_size=embed_size,
+                               num_layers=num_layers,
+                               heads=heads,
+                               forward_expantion=forward_expention,
+                               dropout=dropout,
+                               device=device,
+                               max_len=max_length)
+        self.src_pad_idx = src_pad_idx
+        self.trg_pad_idx = trg_pad_idx
+        self.device = device
+
+    # Making source mask
+    def make_src_mask(self, src):
+        # Source mask will be (N, 1, 1, src_len)
+        src_mask = (src != self.src_pad_idx).unsqueeze(1).unsqueeze(2)
+        return src_mask.to(self.device)
+
+    # Making target mask
+    def make_trg_mask(self, trg):
+        N, trg_len = trg.shape
+        trg_mask = torch.tril(torch.ones(
+            (trg_len, trg_len))).expand(N, 1, trg_len, trg_len)
+        # Here it is a trianguler lower matrix
+        return trg_mask.to(self.device)
+
+    # Now combining every steps one by one
+    def forward(self, src, trg):
+        # Creating mask for source and target
+        # Both shapes are different
+        src_mask = self.make_src_mask(src)
+        trg_mask = self.make_trg_mask(trg)
+
+        # Now let's pass the data to the model
+        enc_src = self.encoder(src, src_mask)
+        out = self.decoder(trg, enc_src, src_mask, trg_mask)
+        return out
