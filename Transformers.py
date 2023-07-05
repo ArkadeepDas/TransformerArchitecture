@@ -285,8 +285,6 @@ class Transformer(nn.Module):
     def __init__(self,
                  src_vocab_size,
                  trg_vocab_size,
-                 src_pad_idx,
-                 trg_pad_idx,
                  embed_size=256,
                  num_layers=6,
                  forward_expention=4,
@@ -312,8 +310,6 @@ class Transformer(nn.Module):
                                dropout=dropout,
                                device=device,
                                max_len=max_length)
-        self.src_pad_idx = src_pad_idx
-        self.trg_pad_idx = trg_pad_idx
         self.device = device
 
     # Now combining every steps one by one
@@ -336,14 +332,9 @@ if __name__ == "__main__":
     trg = torch.tensor([[1, 7, 4, 3, 5, 9, 2, 0], [1, 5, 6, 2, 4, 7, 6,
                                                    2]]).to(device)
 
-    src_pad_idx = 0
-    trg_pad_idx = 0
     src_vocab_size = 50
     trg_vocab_size = 50
-    model = Transformer(src_vocab_size,
-                        trg_vocab_size,
-                        src_pad_idx,
-                        trg_pad_idx,
+    model = Transformer(src_vocab_size, trg_vocab_size,
                         device=device).to(device)
     out = model(x, trg)
     print("Output Shape: ")
