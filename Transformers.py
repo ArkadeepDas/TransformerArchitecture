@@ -173,8 +173,12 @@ class Encoder(nn.Module):
         self.embed_size = embed_size
         self.device = device
         # Word embedding
+        # source_vocab_size = maximum number of unique token it can take
+        # Here we are sending 10 for testing as sentence length
         self.word_embedding = nn.Embedding(source_vocab_size, embed_size)
         # Positional embedding
+        # max_len = maximum number of unique oken it can take
+        # Here we are sending 100 as position lenght. Actually both are same size.
         self.positional_embedding = nn.Embedding(max_length, embed_size)
         # If we want multiple transformer blocks then we can add here
         self.layers = nn.ModuleList([
@@ -222,7 +226,7 @@ class DecoderBlock(nn.Module):
             heads=heads,
             dropout=dropout,
             forward_expansion=forward_expansion)
-        self.dropout = dropout
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, values, keys, src_mask, trg_mask):
         # Here x is input from our target
@@ -277,6 +281,7 @@ class Decoder(nn.Module):
             x = layer(x, encoder_out, encoder_out, src_mask, trg_mask)
 
         out = self.fc_out(x)
+        return out
 
 
 # Now let's put this together to understand all the steps one by one
@@ -316,28 +321,45 @@ class Transformer(nn.Module):
         self.trg_pad_idx = trg_pad_idx
         self.device = device
 
-    # Making source mask
-    def make_src_mask(self, src):
+    # Making source and target mask
+    def make_mask(self, src):
+        # Here src is the input word token
         # Source mask will be (N, 1, 1, src_len)
         src_mask = (src != self.src_pad_idx).unsqueeze(1).unsqueeze(2)
         return src_mask.to(self.device)
 
-    # Making target mask
-    def make_trg_mask(self, trg):
-        N, trg_len = trg.shape
-        trg_mask = torch.tril(torch.ones(
-            (trg_len, trg_len))).expand(N, 1, trg_len, trg_len)
-        # Here it is a trianguler lower matrix
-        return trg_mask.to(self.device)
-
     # Now combining every steps one by one
     def forward(self, src, trg):
         # Creating mask for source and target
-        # Both shapes are different
-        src_mask = self.make_src_mask(src)
-        trg_mask = self.make_trg_mask(trg)
-
+        src_mask = self.make_mask(src)
+        trg_mask = self.make_mask(trg)
         # Now let's pass the data to the model
         enc_src = self.encoder(src, src_mask)
         out = self.decoder(trg, enc_src, src_mask, trg_mask)
         return out
+
+
+# Let's test the model
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
+
+    # Input data of different shape
+    x = torch.tensor([[1, 5, 6, 4, 3, 9, 5, 2, 0], [1, 8, 7, 3, 4, 5, 6, 7,
+                                                    2]]).to(device)
+    # Target data of different shape
+    trg = torch.tensor([[1, 7, 4, 3, 5, 9, 2, 0], [1, 5, 6, 2, 4, 7, 6,
+                                                   2]]).to(device)
+
+    src_pad_idx = 0
+    trg_pad_idx = 0
+    src_vocab_size = 50
+    trg_vocab_size = 50
+    model = Transformer(src_vocab_size,
+                        trg_vocab_size,
+                        src_pad_idx,
+                        trg_pad_idx,
+                        device=device).to(device)
+    out = model(x, trg)
+    print("Output Shape: ")
+    print(out.shape)
