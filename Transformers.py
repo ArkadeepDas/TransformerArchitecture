@@ -205,3 +205,31 @@ class Encoder(nn.Module):
             out = layer(out, out, out, mask)
 
         return out
+
+
+# Now let's create the decoder block
+# First buld the decoder block
+class DecoderBlock(nn.Module):
+
+    def __init__(self, embed_size, heads, forward_expansion, dropout, device):
+        super().__init__()
+        # First Attention layer, then normalization layer, then transformer block
+        self.attention = SelfAttention(embed_size=embed_size, heads=heads)
+        self.norm = nn.LayerNorm(embed_size)
+        self.transformer_block = TransformerBlock(
+            embed_size=embed_size,
+            heads=heads,
+            dropout=dropout,
+            forward_expansion=forward_expansion)
+        self.dropout = dropout
+
+    def forward(self, x, values, keys, src_mask, trg_mask):
+        # Here x is input from our target
+        # Values and keys are from encoder which is already run before this
+        # Decoder mask is trg_mask
+        attention = self.attention(x, x, x, trg_mask)
+        # Skip connection part
+        norm = self.norm(attention + x)
+        # We create the queries from target input and pass values, keys from encoder to transformer block
+        queries = self.dropout(norm)
+        out = self.transformer_block(values, keys, queries, src_mask)
